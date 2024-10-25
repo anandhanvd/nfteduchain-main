@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { disconnectWallet } from './utils/wallet';
 import { getFirestore, collection, getDocs, deleteDoc, doc, query, where, getDoc, addDoc, arrayUnion } from 'firebase/firestore';
 import { PinataSDK } from "pinata-web3";
+import { ethers } from 'ethers';
 
 const SectionButton = ({ title, isActive, onClick }) => (
   <button
@@ -197,6 +198,7 @@ const IssueCertificateSection = ({ selectedRequest }) => {
   const [ipfsHash, setIpfsHash] = useState('');
   const [imageUri, setImageUri] = useState('');
   const [finalUri, setFinalUri] = useState('');
+  const [certificateHash, setCertificateHash] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [cgpa, setCgpa] = useState('');
   const [semMarks, setSemMarks] = useState({
@@ -239,6 +241,20 @@ const IssueCertificateSection = ({ selectedRequest }) => {
     }
   };
 
+  const generateCertificateHash = () => {
+    const studentInfo = {
+      studentName: selectedRequest.studentName,
+      registrationNumber: selectedRequest.registrationNumber,
+      course: selectedRequest.course,
+      cgpa,
+      semMarks,
+    };
+
+    const infoString = JSON.stringify(studentInfo);
+    const hash = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(infoString));
+    setCertificateHash(hash);
+  };
+
   const handleGenerateFinalUri = async () => {
     if (!imageUri) {
       alert('Please upload the certificate image first');
@@ -247,12 +263,15 @@ const IssueCertificateSection = ({ selectedRequest }) => {
 
     setIsUploading(true);
 
+    generateCertificateHash();
+
     const certificateData = {
       ...selectedRequest,
       institutionWalletAddress,
       cgpa,
       semMarks,
       certificateImageUri: imageUri,
+      certificateHash,
     };
 
     try {
@@ -286,6 +305,7 @@ const IssueCertificateSection = ({ selectedRequest }) => {
       semMarks,
       certificateImageUri: imageUri,
       finalUri,
+      certificateHash,
     });
 
     // Reset form or navigate to a different page after submission
@@ -464,6 +484,17 @@ const IssueCertificateSection = ({ selectedRequest }) => {
             <input
               type="text"
               value={finalUri}
+              readOnly
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Certificate Hash
+            </label>
+            <input
+              type="text"
+              value={certificateHash}
               readOnly
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
