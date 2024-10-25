@@ -196,6 +196,7 @@ const IssueCertificateSection = ({ selectedRequest }) => {
   const [certificateImage, setCertificateImage] = useState(null);
   const [ipfsHash, setIpfsHash] = useState('');
   const [imageUri, setImageUri] = useState('');
+  const [finalUri, setFinalUri] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [cgpa, setCgpa] = useState('');
   const [semMarks, setSemMarks] = useState({
@@ -205,7 +206,7 @@ const IssueCertificateSection = ({ selectedRequest }) => {
 
   const pinata = new PinataSDK({
     pinataJwt: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiIzZmQ3ZTUyZS1hYmI4LTQ0NWItODM3Ni02NTRmNjI0OGZhMzkiLCJlbWFpbCI6Iml0Y2h5ZmVldGZsaWNrc0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGluX3BvbGljeSI6eyJyZWdpb25zIjpbeyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJGUkExIn0seyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJOWUMxIn1dLCJ2ZXJzaW9uIjoxfSwibWZhX2VuYWJsZWQiOmZhbHNlLCJzdGF0dXMiOiJBQ1RJVkUifSwiYXV0aGVudGljYXRpb25UeXBlIjoic2NvcGVkS2V5Iiwic2NvcGVkS2V5S2V5IjoiYjU1ODQyMTQ4OTAzYThmZWJmMTUiLCJzY29wZWRLZXlTZWNyZXQiOiJjNzcyNGM0YjNhYTdiYTYwNmMzZTg5M2I3OWU0MDk5NTFmM2YwZDY3NTM5YmRmMGFkMTg3MmFmMjJjNzVkOWUyIiwiZXhwIjoxNzYxNDA1ODYyfQ.GnDh-jQk2w1Buk7KQA-AB5iIOk1hHpaQS2_tK4_WBJQ",
-    pinataGateway: "https://gateway.pinata.cloud", // Replace with your actual gateway if different
+    pinataGateway: "https://gateway.pinata.cloud",
   });
 
   const handleImageUpload = (e) => {
@@ -238,10 +239,42 @@ const IssueCertificateSection = ({ selectedRequest }) => {
     }
   };
 
+  const handleGenerateFinalUri = async () => {
+    if (!imageUri) {
+      alert('Please upload the certificate image first');
+      return;
+    }
+
+    setIsUploading(true);
+
+    const certificateData = {
+      ...selectedRequest,
+      institutionWalletAddress,
+      cgpa,
+      semMarks,
+      certificateImageUri: imageUri,
+    };
+
+    try {
+      const jsonString = JSON.stringify(certificateData);
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const file = new File([blob], 'certificate_data.json', { type: 'application/json' });
+
+      const upload = await pinata.upload.file(file);
+      console.log('Final URI upload response:', upload);
+      setFinalUri(`ipfs://${upload.IpfsHash}`);
+    } catch (error) {
+      console.error('Error generating final URI:', error);
+      alert(`Failed to generate final URI: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!ipfsHash) {
-      alert('Please upload the image to IPFS first');
+    if (!finalUri) {
+      alert('Please generate the final URI first');
       return;
     }
 
@@ -251,11 +284,18 @@ const IssueCertificateSection = ({ selectedRequest }) => {
       institutionWalletAddress,
       cgpa,
       semMarks,
-      certificateImageIpfsHash: ipfsHash,
       certificateImageUri: imageUri,
+      finalUri,
     });
 
     // Reset form or navigate to a different page after submission
+  };
+
+  const handleSemMarksChange = (e, semester) => {
+    setSemMarks({
+      ...semMarks,
+      [semester]: e.target.value,
+    });
   };
 
   return (
@@ -351,6 +391,22 @@ const IssueCertificateSection = ({ selectedRequest }) => {
             />
           </div>
           {/* Add semester marks fields */}
+          {[1, 2, 3, 4, 5, 6].map((sem) => (
+            <div key={sem} className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Semester {sem} Marks
+              </label>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                value={semMarks[`sem${sem}`]}
+                onChange={(e) => handleSemMarksChange(e, `sem${sem}`)}
+                className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                required
+              />
+            </div>
+          ))}
           <div className="mb-4">
             <label className="block text-gray-700 text-sm font-bold mb-2">
               Upload Certificate Image
@@ -387,6 +443,27 @@ const IssueCertificateSection = ({ selectedRequest }) => {
             <input
               type="text"
               value={imageUri}
+              readOnly
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+          </div>
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={handleGenerateFinalUri}
+              disabled={isUploading || !imageUri}
+              className={`${isUploading || !imageUri ? 'bg-gray-500' : 'bg-blue-500 hover:bg-blue-700'} text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline`}
+            >
+              Generate Final URI
+            </button>
+          </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Final URI
+            </label>
+            <input
+              type="text"
+              value={finalUri}
               readOnly
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
