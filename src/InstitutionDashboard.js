@@ -206,11 +206,38 @@ const IssueCertificateSection = ({ selectedRequest }) => {
   });
   const [institutionWalletAddress, setInstitutionWalletAddress] = useState('');
   const [digitalSignature, setDigitalSignature] = useState('');
+  const [finalIpfsUri, setFinalIpfsUri] = useState('');
 
   const pinata = new PinataSDK({
     pinataJwt: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiIzZmQ3ZTUyZS1hYmI4LTQ0NWItODM3Ni02NTRmNjI0OGZhMzkiLCJlbWFpbCI6Iml0Y2h5ZmVldGZsaWNrc0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGluX3BvbGljeSI6eyJyZWdpb25zIjpbeyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJGUkExIn0seyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJOWUMxIn1dLCJ2ZXJzaW9uIjoxfSwibWZhX2VuYWJsZWQiOmZhbHNlLCJzdGF0dXMiOiJBQ1RJVkUifSwiYXV0aGVudGljYXRpb25UeXBlIjoic2NvcGVkS2V5Iiwic2NvcGVkS2V5S2V5IjoiYjU1ODQyMTQ4OTAzYThmZWJmMTUiLCJzY29wZWRLZXlTZWNyZXQiOiJjNzcyNGM0YjNhYTdiYTYwNmMzZTg5M2I3OWU0MDk5NTFmM2YwZDY3NTM5YmRmMGFkMTg3MmFmMjJjNzVkOWUyIiwiZXhwIjoxNzYxNDA1ODYyfQ.GnDh-jQk2w1Buk7KQA-AB5iIOk1hHpaQS2_tK4_WBJQ",
     pinataGateway: "https://gateway.pinata.cloud",
   });
+
+  const API_URL = "https://eth-sepolia.g.alchemy.com/v2/qJIWYUslBP-dBenSIE7WEkkSWzCXM1o1";
+  const PRIVATE_KEY = "3b5276e9aa5ecc8e43cf3bbb83ed95981dc1ef502786fd098ad56a9910cca60b";
+  const contractAddress = "0x37297556eC4C9f2Cf7C1FadFb90d10e4e89D43E0";
+
+  const contractABI = [
+    "function mintCertificate(address recipient, string memory ipfsURI, string memory digitalSignature, string memory publicKey) external returns (uint256)",
+    "event CertificateMinted(address indexed recipient, uint256 indexed tokenId, string ipfsURI)"
+  ];
+
+  const mintNFT = async (recipient, ipfsURI, digitalSignature, publicKey) => {
+    const provider = new ethers.providers.JsonRpcProvider(API_URL);
+    const signer = new ethers.Wallet(PRIVATE_KEY, provider);
+    const contract = new ethers.Contract(contractAddress, contractABI, signer);
+
+    try {
+      const tx = await contract.mintCertificate(recipient, ipfsURI, digitalSignature, publicKey);
+      const receipt = await tx.wait();
+      console.log("Certificate minted successfully!");
+      console.log("Transaction hash:", receipt.transactionHash);
+      return receipt.transactionHash;
+    } catch (error) {
+      console.error("Error minting certificate:", error);
+      throw error;
+    }
+  };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -321,8 +348,8 @@ const IssueCertificateSection = ({ selectedRequest }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!finalUri) {
-      alert('Please generate the final URI first');
+    if (!finalIpfsUri) {
+      alert('Please generate the final IPFS URI first');
       return;
     }
     if (!digitalSignature) {
@@ -330,19 +357,42 @@ const IssueCertificateSection = ({ selectedRequest }) => {
       return;
     }
 
-    // Add your logic here to submit the certificate data
-    console.log('Certificate data:', {
-      ...selectedRequest,
-      institutionWalletAddress,
-      cgpa,
-      semMarks,
-      certificateImageUri: imageUri,
-      finalUri,
-      certificateHash,
-      digitalSignature,
-    });
+    try {
+      // Check if MetaMask is installed
+      if (typeof window.ethereum === 'undefined') {
+        throw new Error('MetaMask is not installed!');
+      }
 
-    // Reset form or navigate to a different page after submission
+      // Request account access
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+
+      // Create a Web3Provider instance
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+
+      // Create contract instance
+      const contract = new ethers.Contract(contractAddress, contractABI, signer);
+
+      // Prepare transaction
+      const tx = await contract.mintCertificate(
+        selectedRequest.walletAddress, // student wallet address
+        finalIpfsUri,
+        digitalSignature,
+        institutionWalletAddress // institution wallet address (public key)
+      );
+
+      // Wait for transaction confirmation
+      const receipt = await tx.wait();
+
+      console.log('Certificate issued successfully!');
+      console.log('Transaction hash:', receipt.transactionHash);
+      alert(`Certificate issued successfully! Transaction hash: ${receipt.transactionHash}`);
+
+      // Reset form or navigate to a different page after submission
+    } catch (error) {
+      console.error('Error issuing certificate:', error);
+      alert(`Failed to issue certificate: ${error.message}`);
+    }
   };
 
   const handleSemMarksChange = (e, semester) => {
@@ -550,12 +600,49 @@ const IssueCertificateSection = ({ selectedRequest }) => {
             <input
               type="text"
               value={digitalSignature}
+              onChange={(e) => setDigitalSignature(e.target.value)}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Final IPFS URI
+            </label>
+            <input
+              type="text"
+              value={finalIpfsUri}
+              onChange={(e) => setFinalIpfsUri(e.target.value)}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Institution Wallet Address
+            </label>
+            <input
+              type="text"
+              value={institutionWalletAddress}
+              onChange={(e) => setInstitutionWalletAddress(e.target.value)}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              required
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Student Wallet Address
+            </label>
+            <input
+              type="text"
+              value={selectedRequest.walletAddress}
               readOnly
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
           </div>
           <button
             type="submit"
+            onClick={handleSubmit}
             className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
           >
             Issue Certificate
