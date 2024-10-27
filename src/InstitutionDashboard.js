@@ -23,6 +23,8 @@ const InstitutionDashboard = () => {
   const [requests, setRequests] = useState([]);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [institutionName, setInstitutionName] = useState('');
+  const [approvedRequestId, setApprovedRequestId] = useState(null);
+  const [issuedCertificates, setIssuedCertificates] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -103,6 +105,17 @@ const InstitutionDashboard = () => {
   const handleApprove = (request) => {
     setSelectedRequest(request);
     setActiveSection('issue-certificate');
+    setApprovedRequestId(request.id);
+  };
+
+  const handleIssueCertificate = (certificateDetails) => {
+    if (approvedRequestId) {
+      setRequests(requests.filter(request => request.id !== approvedRequestId));
+      setIssuedCertificates([...issuedCertificates, certificateDetails]);
+      setApprovedRequestId(null);
+      setSelectedRequest(null);
+      setActiveSection('manage-certificates');
+    }
   };
 
   return (
@@ -138,10 +151,13 @@ const InstitutionDashboard = () => {
         </div>
         <div className="w-2/3 bg-white p-6 rounded-lg shadow-md">
           {activeSection === 'issue-certificate' && (
-            <IssueCertificateSection selectedRequest={selectedRequest} />
+            <IssueCertificateSection 
+              selectedRequest={selectedRequest} 
+              onIssueCertificate={handleIssueCertificate}
+            />
           )}
           {activeSection === 'manage-certificates' && (
-            <p>Manage Certificates functionality will be displayed here.</p>
+            <ManageCertificatesSection issuedCertificates={issuedCertificates} />
           )}
           {activeSection === 'requests' && (
             <div>
@@ -193,7 +209,7 @@ const InstitutionDashboard = () => {
   );
 };
 
-const IssueCertificateSection = ({ selectedRequest }) => {
+const IssueCertificateSection = ({ selectedRequest, onIssueCertificate }) => {
   const [certificateImage, setCertificateImage] = useState(null);
   const [ipfsHash, setIpfsHash] = useState('');
   const [imageUri, setImageUri] = useState('');
@@ -388,7 +404,23 @@ const IssueCertificateSection = ({ selectedRequest }) => {
       console.log('Transaction hash:', receipt.transactionHash);
       alert(`Certificate issued successfully! Transaction hash: ${receipt.transactionHash}`);
 
-      // Reset form or navigate to a different page after submission
+      // Create certificate details object
+      const certificateDetails = {
+        studentName: selectedRequest.studentName,
+        registrationNumber: selectedRequest.registrationNumber,
+        course: selectedRequest.course,
+        walletAddress: selectedRequest.walletAddress,
+        institutionName: selectedRequest.institutionName,
+        cgpa,
+        semMarks,
+        transactionHash: receipt.transactionHash,
+        ipfsUri: finalIpfsUri,
+        issuedAt: new Date().toISOString(),
+      };
+
+      // Call the onIssueCertificate function to update the parent component
+      onIssueCertificate(certificateDetails);
+
     } catch (error) {
       console.error('Error issuing certificate:', error);
       alert(`Failed to issue certificate: ${error.message}`);
@@ -650,6 +682,31 @@ const IssueCertificateSection = ({ selectedRequest }) => {
         </form>
       ) : (
         <p>No request selected. Please approve a request from the Requests section.</p>
+      )}
+    </div>
+  );
+};
+
+const ManageCertificatesSection = ({ issuedCertificates }) => {
+  return (
+    <div>
+      <h2 className="text-2xl font-bold text-blue-800 mb-4">Manage Certificates</h2>
+      {issuedCertificates.length > 0 ? (
+        <ul className="space-y-4">
+          {issuedCertificates.map((cert, index) => (
+            <li key={index} className="border p-4 rounded-lg shadow-md">
+              <h3 className="text-lg font-semibold">{cert.studentName}</h3>
+              <p><strong>Registration Number:</strong> {cert.registrationNumber}</p>
+              <p><strong>Course:</strong> {cert.course}</p>
+              <p><strong>CGPA:</strong> {cert.cgpa}</p>
+              <p><strong>Transaction Hash:</strong> {cert.transactionHash}</p>
+              <p><strong>IPFS URI:</strong> {cert.ipfsUri}</p>
+              <p><strong>Issued At:</strong> {new Date(cert.issuedAt).toLocaleString()}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>No certificates issued yet.</p>
       )}
     </div>
   );
