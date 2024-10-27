@@ -205,6 +205,7 @@ const IssueCertificateSection = ({ selectedRequest }) => {
     sem1: '', sem2: '', sem3: '', sem4: '', sem5: '', sem6: ''
   });
   const [institutionWalletAddress, setInstitutionWalletAddress] = useState('');
+  const [digitalSignature, setDigitalSignature] = useState('');
 
   const pinata = new PinataSDK({
     pinataJwt: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiIzZmQ3ZTUyZS1hYmI4LTQ0NWItODM3Ni02NTRmNjI0OGZhMzkiLCJlbWFpbCI6Iml0Y2h5ZmVldGZsaWNrc0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGluX3BvbGljeSI6eyJyZWdpb25zIjpbeyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJGUkExIn0seyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJOWUMxIn1dLCJ2ZXJzaW9uIjoxfSwibWZhX2VuYWJsZWQiOmZhbHNlLCJzdGF0dXMiOiJBQ1RJVkUifSwiYXV0aGVudGljYXRpb25UeXBlIjoic2NvcGVkS2V5Iiwic2NvcGVkS2V5S2V5IjoiYjU1ODQyMTQ4OTAzYThmZWJmMTUiLCJzY29wZWRLZXlTZWNyZXQiOiJjNzcyNGM0YjNhYTdiYTYwNmMzZTg5M2I3OWU0MDk5NTFmM2YwZDY3NTM5YmRmMGFkMTg3MmFmMjJjNzVkOWUyIiwiZXhwIjoxNzYxNDA1ODYyfQ.GnDh-jQk2w1Buk7KQA-AB5iIOk1hHpaQS2_tK4_WBJQ",
@@ -290,10 +291,42 @@ const IssueCertificateSection = ({ selectedRequest }) => {
     }
   };
 
+  const generateDigitalSignature = async () => {
+    if (!window.ethereum) {
+      alert('MetaMask is not installed!');
+      return;
+    }
+
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const account = accounts[0];
+
+      if (account.toLowerCase() !== institutionWalletAddress.toLowerCase()) {
+        alert('Please connect MetaMask with the institution wallet address you provided.');
+        return;
+      }
+
+      const messageToSign = `\x19Ethereum Signed Message:\n${certificateHash.length}${certificateHash}`;
+      const signature = await window.ethereum.request({
+        method: 'personal_sign',
+        params: [messageToSign, account],
+      });
+
+      setDigitalSignature(signature);
+    } catch (error) {
+      console.error('Error generating digital signature:', error);
+      alert(`Failed to generate digital signature: ${error.message}`);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!finalUri) {
       alert('Please generate the final URI first');
+      return;
+    }
+    if (!digitalSignature) {
+      alert('Please generate the digital signature first');
       return;
     }
 
@@ -306,6 +339,7 @@ const IssueCertificateSection = ({ selectedRequest }) => {
       certificateImageUri: imageUri,
       finalUri,
       certificateHash,
+      digitalSignature,
     });
 
     // Reset form or navigate to a different page after submission
@@ -495,6 +529,27 @@ const IssueCertificateSection = ({ selectedRequest }) => {
             <input
               type="text"
               value={certificateHash}
+              readOnly
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+          </div>
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={generateDigitalSignature}
+              disabled={!certificateHash}
+              className={`${!certificateHash ? 'bg-gray-500' : 'bg-blue-500 hover:bg-blue-700'} text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline`}
+            >
+              Generate Digital Signature
+            </button>
+          </div>
+          <div className="mb-4">
+            <label className="block text-gray-700 text-sm font-bold mb-2">
+              Digital Signature
+            </label>
+            <input
+              type="text"
+              value={digitalSignature}
               readOnly
               className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             />
